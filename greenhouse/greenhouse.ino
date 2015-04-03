@@ -1,3 +1,5 @@
+ddefault :
+
 #include <MySigningNone.h>
 #include <MyTransportRFM69.h>
 #include <MyTransportNRF24.h>
