@@ -1,5 +1,3 @@
-ddefault :
-
 #include <MySigningNone.h>
 #include <MyTransportRFM69.h>
 #include <MyTransportNRF24.h>
@@ -10,10 +8,11 @@ ddefault :
 #include <MySensor.h>
 #include <SPI.h>
 #include <DHT.h>
+#include <Bounce2.h>
 
-#define DIGITAL_INPUT_SOIL_SENSOR 2
+#define DIGITAL_INPUT_SOIL_SENSOR 4
 #define DIGITAL_INPUT_DOOR 3
-#define DIGITAL_INPUT_WINDOW 4
+#define DIGITAL_INPUT_WINDOW 2
 #define DHTPIN 5     // what pin we're connected to
 
 #define CHILD_TEMPERATURE 1
@@ -35,11 +34,14 @@ MyHwATMega328 hw;
 
 MySensor gw(transport, hw /*, signer*/);
 
+Bounce debouncer[2];
+byte oldValue[2] = {
+  -1, -1};
+
 // Change to V_LIGHT if you use S_LIGHT in presentation below
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 MyMessage humidityMessage(CHILD_HUMIDITY, V_HUM);
-MyMessage doorMessage(CHILD_DOOR, V_TRIPPED);
-MyMessage windowMessage(CHILD_WINDOW, V_TRIPPED);
+MyMessage reed[2] = {MyMessage(CHILD_DOOR, V_TRIPPED),MyMessage(CHILD_WINDOW, V_TRIPPED)};
 MyMessage soilMessage(CHILD_DIGITAL_SOIL, V_TRIPPED);
 MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
 
@@ -64,8 +66,17 @@ void setup()
   gw.present(CHILD_DIGITAL_SOIL, S_MOTION);
   gw.present(CHILD_POWER, S_POWER);
   
-  digitalWrite(DIGITAL_INPUT_DOOR,HIGH);
-  digitalWrite(DIGITAL_INPUT_WINDOW,HIGH);
+  
+  debouncer[0] = Bounce();
+  debouncer[1] = Bounce();
+  // Setup the buttons and Activate internal pull-ups
+  pinMode(DIGITAL_INPUT_DOOR,INPUT_PULLUP);
+  pinMode(DIGITAL_INPUT_WINDOW, INPUT_PULLUP);
+  //
+  debouncer[0].attach(DIGITAL_INPUT_DOOR);
+  debouncer[1].attach(DIGITAL_INPUT_WINDOW);
+  debouncer[0].interval(5);
+  debouncer[1].interval(5);
 }
 
 
@@ -114,6 +125,15 @@ void loop()
     lastTemperatureValue = te;
   }
 
+for (byte i = 0; i < 2; i++)
+  {
+    debouncer[i].update();
+    int value = debouncer[i].read();
+    if (value != oldValue[i]);
+    gw.send(reed[i].setSensor(i).set(value == HIGH? 1 : 0), false); 
+    oldValue[i] = value;
+  }
+  /*
   int door = digitalRead(DIGITAL_INPUT_DOOR);
   if (door != lastDoorValue) {
     gw.send(doorMessage.set(door));
@@ -126,7 +146,7 @@ void loop()
     gw.send(windowMessage.set(door));
     lastWindowValue = window;
   }
-
-  gw.sleep(900000);
+*/
+  gw.sleep(DIGITAL_INPUT_DOOR - 2, CHANGE, DIGITAL_INPUT_WINDOW - 2, CHANGE,900000);
 }
 
