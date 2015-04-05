@@ -12,7 +12,7 @@
 
 #define DIGITAL_INPUT_SOIL_SENSOR 4
 #define DIGITAL_INPUT_DOOR 3
-#define DIGITAL_INPUT_WINDOW 2
+#define DIGITAL_INPUT_WINDOW 6
 #define DHTPIN 5     // what pin we're connected to
 
 #define CHILD_TEMPERATURE 1
@@ -26,7 +26,7 @@
 
 #define DHTTYPE DHT22   // DHT 22  (AM2302)
 
-int BATTERY_SENSE_PIN  = A5;  // select the input pin for the battery sense point
+int BATTERY_SENSE_PIN  = A7;  // select the input pin for the battery sense point
 
 MyTransportRFM69 transport;
 // Hardware profile
@@ -77,11 +77,12 @@ void setup()
   // Setup the buttons and Activate internal pull-ups
   pinMode(DIGITAL_INPUT_DOOR,INPUT_PULLUP);
   pinMode(DIGITAL_INPUT_WINDOW, INPUT_PULLUP);
-  //
+  /*
   debouncer[0].attach(DIGITAL_INPUT_DOOR);
   debouncer[1].attach(DIGITAL_INPUT_WINDOW);
   debouncer[0].interval(5);
   debouncer[1].interval(5);
+  */
 }
 
 
@@ -111,6 +112,7 @@ void loop()
   //  soil moisture
   int soilValue = digitalRead(DIGITAL_INPUT_SOIL_SENSOR); // 1 = Not triggered, 0 = In soil with water
   if (soilValue != lastSoilValue) {
+      Serial.println(" oil ");
     Serial.println(soilValue);
     gw.send(soilMessage.set(soilValue == 0 ? 1 : 0)); // Send the inverse to gw as tripped should be when no water in soil
     lastSoilValue = soilValue;
@@ -118,6 +120,7 @@ void loop()
 
   float h = dht.readHumidity();
   if (h != lastHumidityValue && !isnan(h)) { // Read temperature as Celsius
+    Serial.println(" humidity ");
     Serial.println(h);
     gw.send(humidityMessage.set(h, 1));
     lastHumidityValue = h;
@@ -125,33 +128,37 @@ void loop()
   
   float te = dht.readTemperature();
   if (te != lastTemperatureValue && !isnan(te)) { // Read temperature as Celsius
+    Serial.println(" temperature ");
     Serial.println(te);
     gw.send(temperatureMessage.set(te, 1));
     lastTemperatureValue = te;
   }
-
-for (byte i = 0; i < 2; i++)
+/*
+for (byte i = 0; i < 1; i++)
   {
     debouncer[i].update();
     int value = debouncer[i].read();
     if (value != oldValue[i]);
-    gw.send(reed[i].setSensor(i).set(value == HIGH? 1 : 0), false); 
+      Serial.println("door");
+        Serial.println(value);
+    gw.send(reed[i].set(value), false); 
     oldValue[i] = value;
   }
-  /*
+  */
+  
   int door = digitalRead(DIGITAL_INPUT_DOOR);
   if (door != lastDoorValue) {
-    gw.send(doorMessage.set(door));
+    gw.send(reed[0].set(door));
     lastDoorValue = door;
   }
 
 
   int window = digitalRead(DIGITAL_INPUT_WINDOW);
   if (window != lastWindowValue) {
-    gw.send(windowMessage.set(door));
+    gw.send(reed[1].set(window));
     lastWindowValue = window;
   }
-*/
-  gw.sleep(DIGITAL_INPUT_DOOR - 2, CHANGE, DIGITAL_INPUT_WINDOW - 2, CHANGE,900000);
+
+  gw.sleep(DIGITAL_INPUT_DOOR - 2, CHANGE, 900000);//DIGITAL_INPUT_WINDOW - 2, CHANGE,900000);
 }
 
