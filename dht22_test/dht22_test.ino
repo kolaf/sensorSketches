@@ -56,7 +56,7 @@ int lastWindowValue = -1;
 void setup()
 {
   analogReference(INTERNAL);
-  gw.begin(NULL,1);
+  gw.begin(NULL,7);
   gw.sendSketchInfo("Greenhouse", "1.0");
   delay(250);
   gw.present(CHILD_TEMPERATURE, S_TEMP);
@@ -160,6 +160,6 @@ for (byte i = 0; i < 1; i++)
     lastWindowValue = window;
   }
 
-  gw.sleep(DIGITAL_INPUT_DOOR - 2, CHANGE, 900000);//DIGITAL_INPUT_WINDOW - 2, CHANGE,900000);
+  gw.sleep(DIGITAL_INPUT_DOOR - 2, CHANGE, 2000);//DIGITAL_INPUT_WINDOW - 2, CHANGE,900000);
 }
 
