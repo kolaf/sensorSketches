@@ -26,6 +26,7 @@ DallasTemperature sensors(&oneWire);
 float lastTemperature  = 0;
 long lastTemperatureSent = 0;
 unsigned long time;
+unsigned long nBlinks = 0,lastBlink;
 int req = 0;
 
 
@@ -89,17 +90,15 @@ void loop() {
   if (interval > PERIOD) { // 1+ sec passed
     sensors.requestTemperatures();
     req = 1;
+    lastTemperatureSent  = time;
   }
-  if (req == 1 && interval > PERIOD  + 100) {
+  if (req == 1 && interval > 100) {
     req = 0;
     float temperature = static_cast<float>(sensors.getTempCByIndex(0));
     if (lastTemperature !=   temperature && temperature  != -127) {
       gw.send(temperatureMessage.set(temperature, 1));
-      // tdebug
       lastTemperature  = temperature;
-      lastTemperatureSent  = time;
     }
-
   }
   //  ledOn=!ledOn;
   //      ledBlink();
@@ -118,23 +117,25 @@ void loop() {
 }
 
 void ledBlink() {
-  static int nBlinks = 0;
   time = millis();
   unsigned long interval = time - last;
   digitalWrite(LED, !digitalRead(LED));
   nBlinks++;
   if (interval < 0) { // millis() overflow
     last = time;
-    nBlinks = 0;
+    //nBlinks = 0;
   } else if (interval > PERIOD) { // 1+ sec passed
     // Blinks are 1000 per kWh, or 1 Wh each
     // One hour has 3.6M milliseconds
-    long watts = nBlinks * 1 * 3.6E6 / interval;
+    
+    long watts = (nBlinks-lastBlink) * 1 * 3.6E6 / interval;
+
     gw.send(currentPowerMessage.set(watts, 1));
     gw.send(powerMessage.set((double)nBlinks / 1000.0, 4));
     ///wattSend(watts);
     last = time;
-    nBlinks = 0;
+    lastBlink=nBlinks;
+//    nBlinks = 0;
 
 
   }

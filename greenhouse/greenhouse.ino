@@ -56,7 +56,7 @@ int lastWindowValue = -1;
 void setup()
 {
   analogReference(INTERNAL);
-  gw.begin(NULL,1);
+  gw.begin(NULL,7);
   gw.sendSketchInfo("Greenhouse", "1.0");
   delay(250);
   gw.present(CHILD_TEMPERATURE, S_TEMP);
