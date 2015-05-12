@@ -211,7 +211,6 @@ void loop()
     }
     }
   */
-  delay(10);
 }
 
 void blinkLight(signed long remaining) {
