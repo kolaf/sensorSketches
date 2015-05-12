@@ -13,11 +13,11 @@
 #include <SI7021.h>        //get it here: https://github.com/LowPowerLab/SI7021
 #include <Wire.h>
 
-#define REPORT_INTERVAL 300
+#define REPORT_INTERVAL 30000
 #define ALTITUDE 220
 #define BUTTON 3 //cannot change because of interrupt
 #define RELAY 6
-#define LED 7
+#define LED 9
 
 #define CHILD_TEMPERATURE 1
 #define CHILD_HUMIDITY 2
@@ -35,7 +35,7 @@ MyHwATMega328 hw;
 
 MySensor gw(transport, hw /*, signer*/);
 
-Bounce buttonBounce;
+Bounce buttonBounce = Bounce();
 
 // Change to V_LIGHT if you use S_LIGHT in presentation below
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
@@ -44,17 +44,21 @@ MyMessage pressureMessage(CHILD_PRESSURE, V_PRESSURE);
 MyMessage waterMessage(CHILD_WATER, V_TRIPPED);
 MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
 
-unsigned long timeRemaining = 0;
-unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0;
+signed long timeRemaining = 0;
+unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0;
 
 void setup()
 {
   pinMode(RELAY, OUTPUT);
   pinMode(LED, OUTPUT);
   pinMode(BATTERY_SENSE_PIN, INPUT);
+  pinMode(BUTTON, INPUT);
+  digitalWrite(BUTTON, HIGH);
   sensor.begin();
   pressure.begin();
-  gw.begin(NULL, 7);
+  buttonBounce.attach(BUTTON);
+  buttonBounce.interval(5);
+  gw.begin(NULL, 6,true);
   gw.sendSketchInfo("Water control", "1.0");
   delay(250);
   gw.present(CHILD_TEMPERATURE, S_TEMP);
@@ -160,41 +164,65 @@ void loop()
   }
 
   buttonBounce.update();
+  //  int value = digitalRead(BUTTON);
   int value = buttonBounce.read();
-  if (value == 1) {
+  if (value == 0 && buttonStart == 0) {
     buttonStart = time;
-  } else {
+    Serial.println("bbutton pressed");
+  } else if (value == 1 && buttonStart  > 0) {
     buttonFinish = time;
+    Serial.print("bbutton released: ");
+    Serial.println(buttonFinish - buttonStart);
     if (buttonFinish - buttonStart < 3000) { //increase flow time
-      timeRemaining += 1000;
+      timeRemaining += 60000;
+      lastReduce=0;
     } else {
       timeRemaining = 0;
+      digitalWrite(LED,HIGH);
+      delay(1000);
+            digitalWrite(LED,LOW);
     }
     buttonFinish = 0;
     buttonStart = 0;
   }
-  if (timeRemaining > 0) {
-    digitalWrite(RELAY, HIGH);
-    timeRemaining -= (time - lastCheck);
-  } else {
-    digitalWrite(RELAY, LOW);
-    timeRemaining = 0;
+  if (time - lastReduce > 15000) {
+    lastReduce = time;
+    if (timeRemaining > 0) {
+
+      digitalWrite(RELAY, HIGH);
+      timeRemaining -= (time - lastCheck);
+      Serial.println((timeRemaining));
+    } else {
+      digitalWrite(RELAY, LOW);
+      timeRemaining = 0;
+    }
+    blinkLight(timeRemaining);
   }
-  blinkLight(timeRemaining);
+  //  Serial.print("Time remaining : ");
+  //  Serial.println(timeRemaining);
+
   lastCheck = time;
-  if (timeRemaining > 0) {
-    gw.sleep(BUTTON - 2, CHANGE, 15);
-  } else {
-    gw.sleep(BUTTON - 2, CHANGE, REPORT_INTERVAL);
-  }
+  /*
+    if(buttonStart>0){
+    if (timeRemaining > 0) {
+      gw.sleep(BUTTON - 2, CHANGE, 15000);
+    } else {
+      gw.sleep(BUTTON - 2, CHANGE, REPORT_INTERVAL);
+    }
+    }
+  */
+  delay(10);
 }
 
-void blinkLight(unsigned long remaining) {
-  int number = remaining / 1000;
-  for (int i = 0; i < number + 1; i++) {
+void blinkLight(signed long remaining) {
+  int number = 1 + remaining / 60000;
+  if (remaining == 0) {
+    number = 0;
+  }
+  for (int i = 0; i < number ; i++) {
     digitalWrite(LED, HIGH);
-    delay(500);
+    delay(50);
     digitalWrite(LED, LOW);
-    delay(500);
+    delay(200);
   }
 }
