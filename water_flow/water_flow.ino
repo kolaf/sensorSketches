@@ -46,6 +46,7 @@ MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
 
 signed long timeRemaining = 0;
 unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0;
+bool changed = false;
 
 void setup()
 {
@@ -54,11 +55,12 @@ void setup()
   pinMode(BATTERY_SENSE_PIN, INPUT);
   pinMode(BUTTON, INPUT);
   digitalWrite(BUTTON, HIGH);
+  digitalWrite(RELAY, HIGH);
   sensor.begin();
   pressure.begin();
   buttonBounce.attach(BUTTON);
   buttonBounce.interval(5);
-  gw.begin(NULL, 6,true);
+  gw.begin(NULL, 6, true);
   gw.sendSketchInfo("Water control", "1.0");
   delay(250);
   gw.present(CHILD_TEMPERATURE, S_TEMP);
@@ -175,27 +177,33 @@ void loop()
     Serial.println(buttonFinish - buttonStart);
     if (buttonFinish - buttonStart < 3000) { //increase flow time
       timeRemaining += 60000;
-      lastReduce=0;
+      lastReduce = time;
+      changed = true;
     } else {
       timeRemaining = 0;
-      digitalWrite(LED,HIGH);
+      changed = true;
+      lastReduce = time;
+      digitalWrite(LED, HIGH);
       delay(1000);
-            digitalWrite(LED,LOW);
+      digitalWrite(LED, LOW);
     }
     buttonFinish = 0;
     buttonStart = 0;
   }
-  if (time - lastReduce > 15000) {
-    lastReduce = time;
+  if (time - lastReduce > 15000  || changed) {
+    changed = false;
+    timeRemaining -= (time - lastReduce);
     if (timeRemaining > 0) {
 
-      digitalWrite(RELAY, HIGH);
-      timeRemaining -= (time - lastCheck);
+      digitalWrite(RELAY, LOW);
+
       Serial.println((timeRemaining));
     } else {
-      digitalWrite(RELAY, LOW);
+      digitalWrite(RELAY, HIGH);
       timeRemaining = 0;
+      Serial.println((timeRemaining));
     }
+    lastReduce = time;
     blinkLight(timeRemaining);
   }
   //  Serial.print("Time remaining : ");
