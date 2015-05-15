@@ -13,7 +13,7 @@
 #include <SI7021.h>        //get it here: https://github.com/LowPowerLab/SI7021
 #include <Wire.h>
 
-#define REPORT_INTERVAL 30000
+#define REPORT_INTERVAL 300000
 #define ALTITUDE 220
 #define BUTTON 3 //cannot change because of interrupt
 #define RELAY 6
@@ -23,6 +23,7 @@
 #define CHILD_HUMIDITY 2
 #define CHILD_PRESSURE 3
 #define CHILD_WATER 4
+#define CHILD_TIME_REMAINING 5
 #define CHILD_POWER 9
 
 SI7021 sensor;
@@ -41,8 +42,9 @@ Bounce buttonBounce = Bounce();
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 MyMessage humidityMessage(CHILD_HUMIDITY, V_HUM);
 MyMessage pressureMessage(CHILD_PRESSURE, V_PRESSURE);
-MyMessage waterMessage(CHILD_WATER, V_TRIPPED);
+MyMessage waterMessage(CHILD_WATER, V_LIGHT);
 MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
+MyMessage timeRemainingMessage(CHILD_TIME_REMAINING, V_DISTANCE);
 
 signed long timeRemaining = 0;
 unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0;
@@ -60,19 +62,20 @@ void setup()
   pressure.begin();
   buttonBounce.attach(BUTTON);
   buttonBounce.interval(5);
-  gw.begin(NULL, 6, true);
+  gw.begin(incomingMessage, 6, true);
   gw.sendSketchInfo("Water control", "1.0");
   delay(250);
   gw.present(CHILD_TEMPERATURE, S_TEMP);
   delay(250);
   gw.present(CHILD_HUMIDITY, S_HUM);
   delay(250);
-  gw.present(CHILD_WATER, S_DOOR);
+  gw.present(CHILD_WATER, S_LIGHT);
   delay(250);
   gw.present(CHILD_PRESSURE, S_BARO);
   delay(250);
   gw.present(CHILD_POWER, S_POWER);
-
+  delay(250);
+  gw.present(CHILD_TIME_REMAINING, S_DISTANCE);
 }
 
 
@@ -194,14 +197,23 @@ void loop()
     changed = false;
     timeRemaining -= (time - lastReduce);
     if (timeRemaining > 0) {
-
-      digitalWrite(RELAY, LOW);
-
+      if (digitalRead(RELAY) == HIGH) {
+        digitalWrite(RELAY, LOW);
+        gw.send(waterMessage.set(true));
+      }
       Serial.println((timeRemaining));
+      gw.send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
     } else {
-      digitalWrite(RELAY, HIGH);
       timeRemaining = 0;
-      Serial.println((timeRemaining));
+      if (digitalRead(RELAY) == LOW) {
+        digitalWrite(RELAY, HIGH);
+        gw.send(waterMessage.set(false));
+        gw.send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
+        Serial.println((timeRemaining));
+      }
+
+
+
     }
     lastReduce = time;
     blinkLight(timeRemaining);
@@ -231,5 +243,32 @@ void blinkLight(signed long remaining) {
     delay(50);
     digitalWrite(LED, LOW);
     delay(200);
+  }
+}
+
+void incomingMessage(const MyMessage &message) {
+  // We only expect one type of message from controller. But we better check anyway.
+  bool state;
+  if (message.isAck()) {
+    Serial.println("This is an ack from gateway");
+  }
+
+  if (message.type == V_LIGHT && strlen(message.getString()) != 0) {
+    // Change relay state
+    state = message.getBool();
+    if (state) {
+      timeRemaining += 480000;
+    } else {
+      timeRemaining=0;
+    }
+    digitalWrite(RELAY, state ? LOW : HIGH);
+    // Store state in eeprom
+    //     gw.saveState(CHILD_ID, state);
+
+    // Write some debug info
+    Serial.print("Incoming change for sensor:");
+    Serial.print(message.sensor);
+    Serial.print(", New status: ");
+    Serial.println(message.getBool());
   }
 }
