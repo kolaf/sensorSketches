@@ -141,65 +141,64 @@ void loop()
   Serial.print(" meters, ");
   Serial.print(ALTITUDE * 3.28084, 0);
   Serial.println(" feet");
-  /*
-    float temperature = sensor.getCelsiusHundredths() / 100;
-    Serial.println("************ Si7021 *********************************");
-    Serial.print("C: "); Serial.print(temperature);
-    int humidity = sensor.getHumidityPercent();
-    Serial.print("   H: "); Serial.print(humidity); Serial.print("%   ");
-    gw.send(temperatureMessage.set(temperature, 1));
-    gw.send(humidityMessage.set(humidity, 1));
-    char status;
-    double T, P, p0, a;
-    status = pressure.startTemperature();
-    if (status != 0)
-    {
-      // Wait for the measurement to complete:
-      delay(status);
 
-      // Retrieve the completed temperature measurement:
-      // Note that the measurement is stored in the variable T.
-      // Function returns 1 if successful, 0 if failure.
+  float temperature = sensor.getCelsiusHundredths() / 100;
+  Serial.println("************ Si7021 *********************************");
+  Serial.print("C: "); Serial.print(temperature);
+  int humidity = sensor.getHumidityPercent();
+  Serial.print("   H: "); Serial.print(humidity); Serial.print("%   ");
+  gw.send(temperatureMessage.set(temperature, 1));
+  gw.send(humidityMessage.set(humidity, 1));
+  char status;
+  double T, P, p0, a;
+  status = pressure.startTemperature();
+  if (status != 0)
+  {
+    // Wait for the measurement to complete:
+    delay(status);
 
-      status = pressure.getTemperature(T);
-      if (status != 0) {
-        Serial.print("C: ");
-        Serial.print(T, 2);
-        Serial.print("    F:");
-        Serial.print((9.0 / 5.0)*T + 32.0, 2);
-        Serial.println("");
-        status = pressure.startPressure(3);
+    // Retrieve the completed temperature measurement:
+    // Note that the measurement is stored in the variable T.
+    // Function returns 1 if successful, 0 if failure.
 
+    status = pressure.getTemperature(T);
+    if (status != 0) {
+      Serial.print("C: ");
+      Serial.print(T, 2);
+      Serial.print("    F:");
+      Serial.print((9.0 / 5.0)*T + 32.0, 2);
+      Serial.println("");
+      status = pressure.startPressure(3);
+
+      if (status != 0)
+      {
+        delay(status);
+        status = pressure.getPressure(P, T);
         if (status != 0)
         {
-          delay(status);
-          status = pressure.getPressure(P, T);
-          if (status != 0)
-          {
-            // Print out the measurement:
-            Serial.print("abs pressure: ");
-            Serial.print(P, 2);
-            Serial.print(" mb, ");
-            Serial.print(P * 0.0295333727, 2);
-            Serial.println(" inHg");
+          // Print out the measurement:
+          Serial.print("abs pressure: ");
+          Serial.print(P, 2);
+          Serial.print(" mb, ");
+          Serial.print(P * 0.0295333727, 2);
+          Serial.println(" inHg");
 
-            // The pressure sensor returns abolute pressure, which varies with altitude.
-            // To remove the effects of altitude, use the sealevel function and your current altitude.
-            // This number is commonly used in weather reports.
-            // Parameters: P = absolute pressure in mb, ALTITUDE = current altitude in m.
-            // Result: p0 = sea-level compensated pressure in mb
+          // The pressure sensor returns abolute pressure, which varies with altitude.
+          // To remove the effects of altitude, use the sealevel function and your current altitude.
+          // This number is commonly used in weather reports.
+          // Parameters: P = absolute pressure in mb, ALTITUDE = current altitude in m.
+          // Result: p0 = sea-level compensated pressure in mb
 
-            p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
-            Serial.print("relative (sea-level) pressure: ");
-            Serial.print(p0, 2);
-            Serial.print(" mb, ");
-            Serial.print(p0 * 0.0295333727, 2);
-            Serial.println(" inHg");
-            gw.send(pressureMessage.set(p0, 1));
-          }
+          p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
+          Serial.print("relative (sea-level) pressure: ");
+          Serial.print(p0, 2);
+          Serial.print(" mb, ");
+          Serial.print(p0 * 0.0295333727, 2);
+          Serial.println(" inHg");
+          gw.send(pressureMessage.set(p0, 1));
         }
       }
     }
-    */
+  }
   gw.sleep(REPORT_INTERVAL);
 }
