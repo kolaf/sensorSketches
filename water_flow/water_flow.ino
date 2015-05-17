@@ -38,17 +38,31 @@ MySensor gw(transport, hw /*, signer*/);
 
 Bounce buttonBounce = Bounce();
 
+char *weather[] = {"stable", "sunny", "cloudy", "unstable", "thunderstorm", "unknown"};
+int minutes;
+float pressureSamples[180];
+int minuteCount = 0;
+bool firstRound = true;
+float pressureAvg[7];
+float dP_dt;
+
 // Change to V_LIGHT if you use S_LIGHT in presentation below
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 MyMessage humidityMessage(CHILD_HUMIDITY, V_HUM);
 MyMessage pressureMessage(CHILD_PRESSURE, V_PRESSURE);
 MyMessage waterMessage(CHILD_WATER, V_LIGHT);
-MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
+//MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
 MyMessage timeRemainingMessage(CHILD_TIME_REMAINING, V_DISTANCE);
+MyMessage forecastMsg(CHILD_PRESSURE, V_FORECAST);
 
 signed long timeRemaining = 0;
-unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0;
+unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0,lastPressureRead = 0;
 bool changed = false;
+
+float lastPressure = -1;
+float lastTemperature = -1;
+float lastHumidity = -1;
+int lastForecast = -1;
 
 void setup()
 {
@@ -72,8 +86,8 @@ void setup()
   gw.present(CHILD_WATER, S_LIGHT);
   delay(250);
   gw.present(CHILD_PRESSURE, S_BARO);
-  delay(250);
-  gw.present(CHILD_POWER, S_POWER);
+  //  delay(250);
+  //  gw.present(CHILD_POWER, S_POWER);
   delay(250);
   gw.present(CHILD_TIME_REMAINING, S_DISTANCE);
 }
@@ -86,98 +100,69 @@ void loop()
 
   gw.process();
   time = millis();
-  if (time - lastReport > REPORT_INTERVAL) {
-    lastReport = time;
-    //*************** READING BATTERY VOLTAGE *********************
-    //turn MOSFET ON and read voltage, should give a valid reading
-    pinMode(A3, OUTPUT);
-    digitalWrite(A3, LOW);
-    Serial.print("  BATT: ");
-    int sensorValue = analogRead(A7);
-    Serial.println(sensorValue);
-    float batteryV  = sensorValue / 10 * 0.00520430107;
-    int batteryPcnt = sensorValue / 100;
-    gw.send(powerMessage.set(batteryV, 1));
-    gw.sendBatteryLevel(batteryPcnt);
-    pinMode(A3, INPUT); //put A3 in HI-Z mode (to allow mosfet gate pullup to turn it OFF)
-    //*************** READING BATTERY VOLTAGE *********************
-    Serial.println("************ BMP180 *********************************");
-    Serial.print("provided altitude: ");
-    Serial.print(ALTITUDE, 0);
-    Serial.print(" meters, ");
-    Serial.print(ALTITUDE * 3.28084, 0);
-    Serial.println(" feet");
-
-    float temperature = sensor.getCelsiusHundredths() / 100;
-    Serial.println("************ Si7021 *********************************");
-    Serial.print("C: "); Serial.print(temperature);
-    int humidity = sensor.getHumidityPercent();
-    Serial.print("   H: "); Serial.print(humidity); Serial.print("%   ");
+  float temperature = sensor.getCelsiusHundredths() / 100;
+  int humidity = sensor.getHumidityPercent();
+  if (lastTemperature != temperature) {
     gw.send(temperatureMessage.set(temperature, 1));
+    Serial.println("SendingTemperatureMessage");
+    lastTemperature = temperature;
+  }
+  if (lastHumidity != humidity) {
     gw.send(humidityMessage.set(humidity, 1));
-    char status;
-    double T, P, p0, a;
-    status = pressure.startTemperature();
-    if (status != 0)
-    {
-      // Wait for the measurement to complete:
-      delay(status);
+    lastHumidity = humidity;
+  }
+  if(time-lastPressureRead>60000){
+    lastPressureRead = time;
+  char status;
+  double T, P, p0, a;
+  status = pressure.startTemperature();
+  if (status != 0)
+  {
+    // Wait for the measurement to complete:
+    delay(status);
 
-      // Retrieve the completed temperature measurement:
-      // Note that the measurement is stored in the variable T.
-      // Function returns 1 if successful, 0 if failure.
+    // Retrieve the completed temperature measurement:
+    // Note that the measurement is stored in the variable T.
+    // Function returns 1 if successful, 0 if failure.
 
-      status = pressure.getTemperature(T);
-      if (status != 0) {
-        Serial.print("C: ");
-        Serial.print(T, 2);
-        Serial.print("    F:");
-        Serial.print((9.0 / 5.0)*T + 32.0, 2);
-        Serial.println("");
-        status = pressure.startPressure(3);
+    status = pressure.getTemperature(T);
+    if (status != 0) {
+      status = pressure.startPressure(3);
 
+      if (status != 0)
+      {
+        delay(status);
+        status = pressure.getPressure(P, T);
         if (status != 0)
         {
-          delay(status);
-          status = pressure.getPressure(P, T);
-          if (status != 0)
-          {
-            // Print out the measurement:
-            Serial.print("abs pressure: ");
-            Serial.print(P, 2);
-            Serial.print(" mb, ");
-            Serial.print(P * 0.0295333727, 2);
-            Serial.println(" inHg");
 
-            // The pressure sensor returns abolute pressure, which varies with altitude.
-            // To remove the effects of altitude, use the sealevel function and your current altitude.
-            // This number is commonly used in weather reports.
-            // Parameters: P = absolute pressure in mb, ALTITUDE = current altitude in m.
-            // Result: p0 = sea-level compensated pressure in mb
-
-            p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
-            Serial.print("relative (sea-level) pressure: ");
-            Serial.print(p0, 2);
-            Serial.print(" mb, ");
-            Serial.print(p0 * 0.0295333727, 2);
-            Serial.println(" inHg");
+          p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
+          int forecast = sample(p0);
+          if (lastPressure != p0) {
             gw.send(pressureMessage.set(p0, 1));
+            lastPressure = p0;
+          }
+          if (lastForecast != forecast) {
+            gw.send(forecastMsg.set(weather[forecast]));
+            lastForecast = forecast;
           }
         }
       }
     }
   }
+  }
+  //  }
 
   buttonBounce.update();
   //  int value = digitalRead(BUTTON);
   int value = buttonBounce.read();
   if (value == 0 && buttonStart == 0) {
     buttonStart = time;
-    Serial.println("bbutton pressed");
+    //    Serial.println("bbutton pressed");
   } else if (value == 1 && buttonStart  > 0) {
     buttonFinish = time;
-    Serial.print("bbutton released: ");
-    Serial.println(buttonFinish - buttonStart);
+    //    Serial.print("bbutton released: ");
+    //  Serial.println(buttonFinish - buttonStart);
     if (buttonFinish - buttonStart < 3000) { //increase flow time
       timeRemaining += 60000;
       lastReduce = time;
@@ -246,29 +231,126 @@ void blinkLight(signed long remaining) {
   }
 }
 
-void incomingMessage(const MyMessage &message) {
+void incomingMessage(const MyMessage & message) {
   // We only expect one type of message from controller. But we better check anyway.
   bool state;
-  if (message.isAck()) {
-    Serial.println("This is an ack from gateway");
-  }
+  /*  if (message.isAck()) {
+      Serial.println("This is an ack from gateway");
+    }*/
 
   if (message.type == V_LIGHT && strlen(message.getString()) != 0) {
     // Change relay state
     state = message.getBool();
     if (state) {
-      timeRemaining += 480000;
+      timeRemaining = 480000;
     } else {
-      timeRemaining=0;
+      timeRemaining = 0;
     }
     digitalWrite(RELAY, state ? LOW : HIGH);
     // Store state in eeprom
     //     gw.saveState(CHILD_ID, state);
 
     // Write some debug info
-    Serial.print("Incoming change for sensor:");
-    Serial.print(message.sensor);
-    Serial.print(", New status: ");
-    Serial.println(message.getBool());
+
+    /*    Serial.print("Incoming change for sensor:");
+        Serial.print(message.sensor);
+        Serial.print(", New status: ");
+        Serial.println(message.getBool());
+        */
   }
 }
+
+int sample(float pressure) {
+  // Algorithm found here
+  // http://www.freescale.com/files/sensors/doc/app_note/AN3914.pdf
+  if (minuteCount == 180)
+    minuteCount = 5;
+
+  pressureSamples[minuteCount] = pressure;
+  minuteCount++;
+
+  if (minuteCount == 5) {
+    // Avg pressure in first 5 min, value averaged from 0 to 5 min.
+    pressureAvg[0] = ((pressureSamples[0] + pressureSamples[1]
+                       + pressureSamples[2] + pressureSamples[3] + pressureSamples[4])
+                      / 5);
+  } else if (minuteCount == 35) {
+    // Avg pressure in 30 min, value averaged from 0 to 5 min.
+    pressureAvg[1] = ((pressureSamples[30] + pressureSamples[31]
+                       + pressureSamples[32] + pressureSamples[33]
+                       + pressureSamples[34]) / 5);
+    float change = (pressureAvg[1] - pressureAvg[0]);
+    if (firstRound) // first time initial 3 hour
+      dP_dt = ((65.0 / 1023.0) * 2 * change); // note this is for t = 0.5hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 1.5); // divide by 1.5 as this is the difference in time from 0 value.
+  } else if (minuteCount == 60) {
+    // Avg pressure at end of the hour, value averaged from 0 to 5 min.
+    pressureAvg[2] = ((pressureSamples[55] + pressureSamples[56]
+                       + pressureSamples[57] + pressureSamples[58]
+                       + pressureSamples[59]) / 5);
+    float change = (pressureAvg[2] - pressureAvg[0]);
+    if (firstRound) //first time initial 3 hour
+      dP_dt = ((65.0 / 1023.0) * change); //note this is for t = 1 hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 2); //divide by 2 as this is the difference in time from 0 value
+  } else if (minuteCount == 95) {
+    // Avg pressure at end of the hour, value averaged from 0 to 5 min.
+    pressureAvg[3] = ((pressureSamples[90] + pressureSamples[91]
+                       + pressureSamples[92] + pressureSamples[93]
+                       + pressureSamples[94]) / 5);
+    float change = (pressureAvg[3] - pressureAvg[0]);
+    if (firstRound) // first time initial 3 hour
+      dP_dt = (((65.0 / 1023.0) * change) / 1.5); // note this is for t = 1.5 hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 2.5); // divide by 2.5 as this is the difference in time from 0 value
+  } else if (minuteCount == 120) {
+    // Avg pressure at end of the hour, value averaged from 0 to 5 min.
+    pressureAvg[4] = ((pressureSamples[115] + pressureSamples[116]
+                       + pressureSamples[117] + pressureSamples[118]
+                       + pressureSamples[119]) / 5);
+    float change = (pressureAvg[4] - pressureAvg[0]);
+    if (firstRound) // first time initial 3 hour
+      dP_dt = (((65.0 / 1023.0) * change) / 2); // note this is for t = 2 hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 3); // divide by 3 as this is the difference in time from 0 value
+  } else if (minuteCount == 155) {
+    // Avg pressure at end of the hour, value averaged from 0 to 5 min.
+    pressureAvg[5] = ((pressureSamples[150] + pressureSamples[151]
+                       + pressureSamples[152] + pressureSamples[153]
+                       + pressureSamples[154]) / 5);
+    float change = (pressureAvg[5] - pressureAvg[0]);
+    if (firstRound) // first time initial 3 hour
+      dP_dt = (((65.0 / 1023.0) * change) / 2.5); // note this is for t = 2.5 hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 3.5); // divide by 3.5 as this is the difference in time from 0 value
+  } else if (minuteCount == 180) {
+    // Avg pressure at end of the hour, value averaged from 0 to 5 min.
+    pressureAvg[6] = ((pressureSamples[175] + pressureSamples[176]
+                       + pressureSamples[177] + pressureSamples[178]
+                       + pressureSamples[179]) / 5);
+    float change = (pressureAvg[6] - pressureAvg[0]);
+    if (firstRound) // first time initial 3 hour
+      dP_dt = (((65.0 / 1023.0) * change) / 3); // note this is for t = 3 hour
+    else
+      dP_dt = (((65.0 / 1023.0) * change) / 4); // divide by 4 as this is the difference in time from 0 value
+    pressureAvg[0] = pressureAvg[5]; // Equating the pressure at 0 to the pressure at 2 hour after 3 hours have past.
+    firstRound = false; // flag to let you know that this is on the past 3 hour mark. Initialized to 0 outside main loop.
+  }
+
+  if (minuteCount < 35 && firstRound) //if time is less than 35 min on the first 3 hour interval.
+    return 5; // Unknown, more time needed
+  else if (dP_dt < (-0.25))
+    return 4; // Quickly falling LP, Thunderstorm, not stable
+  else if (dP_dt > 0.25)
+    return 3; // Quickly rising HP, not stable weather
+  else if ((dP_dt > (-0.25)) && (dP_dt < (-0.05)))
+    return 2; // Slowly falling Low Pressure System, stable rainy weather
+  else if ((dP_dt > 0.05) && (dP_dt < 0.25))
+    return 1; // Slowly rising HP stable good weather
+  else if ((dP_dt > (-0.05)) && (dP_dt < 0.05))
+    return 0; // Stable weather
+  else
+    return 5; // Unknown
+}
+

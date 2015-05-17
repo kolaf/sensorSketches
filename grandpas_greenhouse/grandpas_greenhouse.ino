@@ -137,7 +137,7 @@ void loop()
 
   Serial.println("************ BMP180 *********************************");
   Serial.print("provided altitude: ");
-  Serial.print(ALTITUDE, 0);
+  Serial.print(ALTITUDE*1);
   Serial.print(" meters, ");
   Serial.print(ALTITUDE * 3.28084, 0);
   Serial.println(" feet");
