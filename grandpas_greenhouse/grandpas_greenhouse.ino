@@ -18,7 +18,7 @@
 #define REPORT_INTERVAL 9000
 #define ALTITUDE 220
 #define BUTTON 3 //cannot change because of interrupt
-#define MOISTURE A4
+#define MOISTURE A6
 #define DOOR 5
 #define WINDOW_ONE 6
 #define WINDOW_TWO 7
