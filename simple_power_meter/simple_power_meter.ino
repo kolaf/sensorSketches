@@ -20,11 +20,11 @@
 #define BUTTON_PIN  4  // Arduino Digital I/O pin for button/reed switch
 //RH_RF69 driver(10, 2);
 
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
+//OneWire oneWire(ONE_WIRE_BUS);
+//DallasTemperature sensors(&oneWire);
 
-float lastTemperature  = 0;
-long lastTemperatureSent = 0;
+//float lastTemperature  = 0;
+//long lastTemperatureSent = 0;
 unsigned long time;
 unsigned long nBlinks = 0,lastBlink;
 int req = 0;
@@ -41,7 +41,7 @@ MyMessage powerMessage(CHILD_POWER, V_KWH);
 //MyMessage powerMessageP(CHILD_POWERP, V_KWH);
 MyMessage currentPowerMessage(CHILD_POWER, V_WATT);
 //MyMessage currentPowerMessageP(CHILD_POWERP, V_WATT);
-MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
+//MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 
 static unsigned long last = 0, blink = 0, blinkP = 0, count = 0;
 void setup() {
@@ -50,7 +50,7 @@ void setup() {
   digitalWrite(BLINK_PIN, HIGH);
   //digitalWrite(BLINK_PINP, HIGH);
   gw.begin();
-  sensors.begin();
+//  sensors.begin();
   // After setting up the button, setup debouncer
   gw.sendSketchInfo("Power sensor", "1.0");
   // Register binary input sensor to gw (they will be created as child devices)
@@ -58,7 +58,7 @@ void setup() {
   // If S_LIGHT is used, remember to update variable type you send in. See "msg" above.
   gw.present(CHILD_POWER, S_POWER);
   //  gw.present(CHILD_POWERP, S_POWER);
-  gw.present(CHILD_TEMPERATURE, S_TEMP);
+//  gw.present(CHILD_TEMPERATURE, S_TEMP);
 
 }
 
@@ -74,7 +74,7 @@ void loop() {
   ///delay (1000);
 
   time = millis();
-  if (time - blink > 50) {
+  if (time - blink > 100) {
     if (ledOn && data == 1) {
       blink = time;
       ledOn = false;
@@ -84,7 +84,7 @@ void loop() {
       ledBlink();
     }
   }
-
+/*
   unsigned long interval = time - lastTemperatureSent;
 
   if (interval > PERIOD) { // 1+ sec passed
@@ -100,6 +100,7 @@ void loop() {
       lastTemperature  = temperature;
     }
   }
+  */
   //  ledOn=!ledOn;
   //      ledBlink();
   /*
@@ -182,4 +183,4 @@ static void wattSend(long watts) {
     rf12_easySend(&packet, sizeof packet);
 }
 
-*/
+*/ 

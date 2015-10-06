@@ -56,7 +56,7 @@ MyMessage timeRemainingMessage(CHILD_TIME_REMAINING, V_DISTANCE);
 MyMessage forecastMsg(CHILD_PRESSURE, V_FORECAST);
 
 signed long timeRemaining = 0;
-unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0,lastPressureRead = 0;
+unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0, lastPressureRead = 0;
 bool changed = false;
 
 float lastPressure = -1;
@@ -100,56 +100,57 @@ void loop()
 
   gw.process();
   time = millis();
-  float temperature = sensor.getCelsiusHundredths() / 100;
-  int humidity = sensor.getHumidityPercent();
-  if (lastTemperature != temperature) {
-    gw.send(temperatureMessage.set(temperature, 1));
-    Serial.println("SendingTemperatureMessage");
-    lastTemperature = temperature;
-  }
-  if (lastHumidity != humidity) {
-    gw.send(humidityMessage.set(humidity, 1));
-    lastHumidity = humidity;
-  }
-  if(time-lastPressureRead>60000){
+  if (time - lastPressureRead > 60000) {
+    float temperature = sensor.getCelsiusHundredths() / 100;
+    int humidity = sensor.getHumidityPercent();
+    if (lastTemperature != temperature) {
+      gw.send(temperatureMessage.set(temperature, 1));
+      Serial.println("SendingTemperatureMessage");
+      lastTemperature = temperature;
+    }
+    if (lastHumidity != humidity) {
+      gw.send(humidityMessage.set(humidity, 1));
+      lastHumidity = humidity;
+    }
+
     lastPressureRead = time;
-  char status;
-  double T, P, p0, a;
-  status = pressure.startTemperature();
-  if (status != 0)
-  {
-    // Wait for the measurement to complete:
-    delay(status);
+    char status;
+    double T, P, p0, a;
+    status = pressure.startTemperature();
+    if (status != 0)
+    {
+      // Wait for the measurement to complete:
+      delay(status);
 
-    // Retrieve the completed temperature measurement:
-    // Note that the measurement is stored in the variable T.
-    // Function returns 1 if successful, 0 if failure.
+      // Retrieve the completed temperature measurement:
+      // Note that the measurement is stored in the variable T.
+      // Function returns 1 if successful, 0 if failure.
 
-    status = pressure.getTemperature(T);
-    if (status != 0) {
-      status = pressure.startPressure(3);
+      status = pressure.getTemperature(T);
+      if (status != 0) {
+        status = pressure.startPressure(3);
 
-      if (status != 0)
-      {
-        delay(status);
-        status = pressure.getPressure(P, T);
         if (status != 0)
         {
+          delay(status);
+          status = pressure.getPressure(P, T);
+          if (status != 0)
+          {
 
-          p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
-          int forecast = sample(p0);
-          if (lastPressure != p0) {
-            gw.send(pressureMessage.set(p0, 1));
-            lastPressure = p0;
-          }
-          if (lastForecast != forecast) {
-            gw.send(forecastMsg.set(weather[forecast]));
-            lastForecast = forecast;
+            p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
+            int forecast = sample(p0);
+            if (lastPressure != p0) {
+              gw.send(pressureMessage.set(p0, 1));
+              lastPressure = p0;
+            }
+            if (lastForecast != forecast) {
+              gw.send(forecastMsg.set(weather[forecast]));
+              lastForecast = forecast;
+            }
           }
         }
       }
     }
-  }
   }
   //  }
 
@@ -186,15 +187,15 @@ void loop()
         digitalWrite(RELAY, LOW);
         gw.send(waterMessage.set(true));
       }
-      Serial.println((timeRemaining));
+      // Serial.println((timeRemaining));
       gw.send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
     } else {
       timeRemaining = 0;
       if (digitalRead(RELAY) == LOW) {
         digitalWrite(RELAY, HIGH);
         gw.send(waterMessage.set(false));
-        gw.send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
-        Serial.println((timeRemaining));
+        gw.send(timeRemainingMessage.set(0));
+        // Serial.println((timeRemaining));
       }
 
 

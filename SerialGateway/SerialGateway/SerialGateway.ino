@@ -1,27 +1,27 @@
-  /*
- * Copyright (C) 2013-2014 Henrik Ekblad <henrik.ekblad@gmail.com>
- * 
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- * 
- * DESCRIPTION
- * The ArduinoGateway prints data received from sensors on the serial link. 
- * The gateway accepts input on seral which will be sent out on radio network.
- *
- * The GW code is designed for Arduino Nano 328p / 16MHz
- *
- * Wire connections (OPTIONAL):
- * - Inclusion button should be connected between digital pin 3 and GND
- * - RX/TX/ERR leds need to be connected between +5V (anode) and digital pin 6/5/4 with resistor 270-330R in a series
- *
- * LEDs (OPTIONAL):
- * - RX (green) - blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
- * - TX (yellow) - blink fast on radio message transmitted. In inclusion mode will blink slowly
- * - ERR (red) - fast blink on error during transmission error or recieve crc error  
- */
+/*
+* Copyright (C) 2013-2014 Henrik Ekblad <henrik.ekblad@gmail.com>
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* version 2 as published by the Free Software Foundation.
+*
+* DESCRIPTION
+* The ArduinoGateway prints data received from sensors on the serial link.
+* The gateway accepts input on seral which will be sent out on radio network.
+*
+* The GW code is designed for Arduino Nano 328p / 16MHz
+*
+* Wire connections (OPTIONAL):
+* - Inclusion button should be connected between digital pin 3 and GND
+* - RX/TX/ERR leds need to be connected between +5V (anode) and digital pin 6/5/4 with resistor 270-330R in a series
+*
+* LEDs (OPTIONAL):
+* - RX (green) - blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
+* - TX (yellow) - blink fast on radio message transmitted. In inclusion mode will blink slowly
+* - ERR (red) - fast blink on error during transmission error or recieve crc error
+*/
 
-#define NO_PORTB_PINCHANGES  
+#define NO_PORTB_PINCHANGES
 
 #include <MySigningNone.h>
 #include <MyTransportRFM69.h>
@@ -30,9 +30,9 @@
 #include <MySigningAtsha204Soft.h>
 #include <MySigningAtsha204.h>
 
-#include <SPI.h>  
-#include <MyParserSerial.h>  
-#include <MySensor.h>  
+#include <SPI.h>
+#include <MyParserSerial.h>
+#include <MySensor.h>
 #include <stdarg.h>
 #include <MsTimer2.h>
 #include <PinChangeInt.h>
@@ -43,9 +43,10 @@
 #define RADIO_ERROR_LED_PIN 4  // Error led pin
 #define RADIO_RX_LED_PIN    6  // Receive led pin
 #define RADIO_TX_LED_PIN    5  // the PCB, on board LED
+#define ALIVE_MESSAGE_PERIOD  120000
 
-// NRFRF24L01 radio driver (set low transmit power by default) 
-// MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);  
+// NRFRF24L01 radio driver (set low transmit power by default)
+// MyTransportNRF24 transport(RF24_CE_PIN, RF24_CS_PIN, RF24_PA_LEVEL_GW);
 MyTransportRFM69 transport;
 
 // Message signing driver (signer needed if MY_SIGNING_FEATURE is turned on in MyConfig.h)
@@ -53,7 +54,7 @@ MyTransportRFM69 transport;
 //MySigningAtsha204Soft signer;
 //MySigningAtsha204 signer;
 
-// Hardware profile 
+// Hardware profile
 MyHwATMega328 hw;
 
 // Construct MySensors library (signer needed if MY_SIGNING_FEATURE is turned on in MyConfig.h)
@@ -63,22 +64,24 @@ char inputString[MAX_RECEIVE_LENGTH] = "";    // A string to hold incoming comma
 int inputPos = 0;
 boolean commandComplete = false;  // whether the string is complete
 
+long lastTime = 0, time;
+
 void parseAndSend(char *commandBuffer);
 
 void output(const char *fmt, ... ) {
-   va_list args;
-   va_start (args, fmt );
-   vsnprintf_P(serialBuffer, MAX_SEND_LENGTH, fmt, args);
-   va_end (args);
-   Serial.print(serialBuffer);
+  va_list args;
+  va_start (args, fmt );
+  vsnprintf_P(serialBuffer, MAX_SEND_LENGTH, fmt, args);
+  va_end (args);
+  Serial.print(serialBuffer);
 }
 
-  
-void setup()  
-{ 
+
+void setup()
+{
   gw.begin(incomingMessage, 0, true, 0);
 
-  setupGateway(RADIO_RX_LED_PIN, RADIO_TX_LED_PIN, RADIO_ERROR_LED_PIN, INCLUSION_MODE_PIN, INCLUSION_MODE_TIME, output);  
+  setupGateway(RADIO_RX_LED_PIN, RADIO_TX_LED_PIN, RADIO_ERROR_LED_PIN, INCLUSION_MODE_PIN, INCLUSION_MODE_TIME, output);
 
   // Add led timer interrupt
   MsTimer2::set(300, ledTimersInterrupt);
@@ -92,18 +95,22 @@ void setup()
   serial(PSTR("0;0;%d;0;%d;Gateway startup complete.\n"),  C_INTERNAL, I_GATEWAY_READY);
 }
 
-void loop()  
-{ 
+void loop()
+{
   gw.process();
 
   checkButtonTriggeredInclusion();
   checkInclusionFinished();
-  
+  time = millis();
+  if (time - lastTime > ALIVE_MESSAGE_PERIOD) {
+    lastTime = time;
+    serial(PSTR("0;0;%d;0;%d;Gateway is alive.\n"),  C_INTERNAL, I_LOG_MESSAGE);
+  }
   if (commandComplete) {
     // A command wass issued from serial interface
     // We will now try to send it to the actuator
     parseAndSend(gw, inputString);
-    commandComplete = false;  
+    commandComplete = false;
     inputPos = 0;
   }
 }
@@ -118,10 +125,10 @@ void loop()
 void serialEvent() {
   while (Serial.available()) {
     // get the new byte:
-    char inChar = (char)Serial.read(); 
+    char inChar = (char)Serial.read();
     // if the incoming character is a newline, set a flag
     // so the main loop can do something about it:
-    if (inputPos<MAX_RECEIVE_LENGTH-1 && !commandComplete) { 
+    if (inputPos < MAX_RECEIVE_LENGTH - 1 && !commandComplete) {
       if (inChar == '\n') {
         inputString[inputPos] = 0;
         commandComplete = true;
@@ -131,8 +138,8 @@ void serialEvent() {
         inputPos++;
       }
     } else {
-       // Incoming message too long. Throw away 
-        inputPos = 0;
+      // Incoming message too long. Throw away
+      inputPos = 0;
     }
   }
 }
