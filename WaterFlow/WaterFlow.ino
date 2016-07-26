@@ -2,15 +2,18 @@
 
 // Enable debug prints to serial monitor
 #define MY_DEBUG
-
+#define USE_RADIO
 // Enable and select radio type attached
 #define MY_RADIO_RFM69
 #define MY_IS_RFM69HW
 #define MY_RFM69_FREQUENCY   RF69_868MHZ
 #define MY_NODE_ID 6
+#define MY_REPEATER_FEATURE
 
 #include <SPI.h>
-//#include <MySensors.h>
+#ifdef USE_RADIO
+#include <MySensors.h>
+#endif
 
 
 #include <DHT.h>
@@ -47,7 +50,8 @@ int minuteCount = 0;
 bool firstRound = true;
 float pressureAvg[7];
 float dP_dt;
-/*
+
+#ifdef USE_RADIO
 // Change to V_LIGHT if you use S_LIGHT in presentation below
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 MyMessage humidityMessage(CHILD_HUMIDITY, V_HUM);
@@ -56,7 +60,8 @@ MyMessage waterMessage(CHILD_WATER, V_LIGHT);
 //MyMessage powerMessage(CHILD_POWER, V_VOLTAGE);
 MyMessage timeRemainingMessage(CHILD_TIME_REMAINING, V_DISTANCE);
 MyMessage forecastMsg(CHILD_PRESSURE, V_FORECAST);
-*/
+#endif
+
 signed long timeRemaining = 0;
 unsigned long lastReport = 0, time, buttonStart = 0, buttonFinish = 0, lastCheck = 0, lastReduce = 0, lastPressureRead = 0;
 bool changed = false;
@@ -80,7 +85,7 @@ void setup()
   buttonBounce.interval(5);
 }
 
-/*
+#ifdef USE_RADIO
 void presentation () {
   sendSketchInfo("Water control", "2.0");
   delay(250);
@@ -96,7 +101,7 @@ void presentation () {
   delay(250);
   present(CHILD_TIME_REMAINING, S_DISTANCE);
 }
-*/
+#endif
 
 //  Check if digital input has changed and send in new value
 void loop()
@@ -108,12 +113,16 @@ void loop()
     float temperature = sensor.getCelsiusHundredths() / 100;
     int humidity = sensor.getHumidityPercent();
     if (lastTemperature != temperature) {
-      //send(temperatureMessage.set(temperature, 1));
+#ifdef USE_RADIO
+      send(temperatureMessage.set(temperature, 1));
+#endif
       Serial.println("SendingTemperatureMessage");
       lastTemperature = temperature;
     }
     if (lastHumidity != humidity) {
-      //send(humidityMessage.set(humidity, 1));
+#ifdef USE_RADIO
+      send(humidityMessage.set(humidity, 1));
+#endif
       lastHumidity = humidity;
     }
 
@@ -144,11 +153,15 @@ void loop()
             p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
             int forecast = 5;//sample(p0);
             if (lastPressure != p0) {
-              //send(pressureMessage.set(p0, 1));
+#ifdef USE_RADIO
+              send(pressureMessage.set(p0, 1));
+#endif
               lastPressure = p0;
             }
             if (lastForecast != forecast) {
-              //send(forecastMsg.set(weather[forecast]));
+#ifdef USE_RADIO
+              send(forecastMsg.set(weather[forecast]));
+#endif
               lastForecast = forecast;
             }
           }
@@ -189,16 +202,22 @@ void loop()
     if (timeRemaining > 0) {
       if (digitalRead(RELAY) == LOW) {
         digitalWrite(RELAY, HIGH);
-        //send(waterMessage.set(true));
+#ifdef USE_RADIO
+        send(waterMessage.set(true));
+#endif
       }
       // Serial.println((timeRemaining));
-      //send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
+#ifdef USE_RADIO
+      send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
+#endif
     } else {
       timeRemaining = 0;
       if (digitalRead(RELAY) == HIGH) {
         digitalWrite(RELAY, LOW);
-        //send(waterMessage.set(false));
-        //send(timeRemainingMessage.set(0));
+#ifdef USE_RADIO
+        send(waterMessage.set(false));
+        send(timeRemainingMessage.set(0));
+#endif
         // Serial.println((timeRemaining));
       }
 
@@ -235,7 +254,7 @@ void blinkLight(signed long remaining) {
     delay(200);
   }
 }
-/*
+#ifdef USE_RADIO
 void receive(const MyMessage &message) {
   // We only expect one type of message from controller. But we better check anyway.
   bool state;
@@ -253,10 +272,10 @@ void receive(const MyMessage &message) {
 
     // Write some debug info
 
-   
+
   }
 }
-*/
+#endif
 int sample(float pressure) {
   // Algorithm found here
   // http://www.freescale.com/files/sensors/doc/app_note/AN3914.pdf
