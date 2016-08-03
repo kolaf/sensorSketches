@@ -41,7 +41,7 @@
 // Enable and select radio type attached
 //#define MY_RADIO_NRF24
 #define MY_RADIO_RFM69
-#define MY_REPEATER_FEATURE
+#define MY_RFM69_FREQUENCY   RF69_869MHZ
 
 #include <SPI.h>
 #include <MySensors.h>  

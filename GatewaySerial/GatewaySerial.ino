@@ -44,7 +44,7 @@
 //#define MY_RADIO_NRF24
 #define MY_RADIO_RFM69
 #define MY_IS_RFM69HW
-#define MY_RFM69_FREQUENCY   RF69_868MHZ
+#define MY_RFM69_FREQUENCY   RF69_869MHZ
 // Enable serial gateway
 #define MY_GATEWAY_SERIAL
 

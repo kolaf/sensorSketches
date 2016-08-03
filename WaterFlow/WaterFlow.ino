@@ -6,7 +6,7 @@
 // Enable and select radio type attached
 #define MY_RADIO_RFM69
 #define MY_IS_RFM69HW
-#define MY_RFM69_FREQUENCY   RF69_868MHZ
+#define MY_RFM69_FREQUENCY   RF69_867MHZ
 #define MY_NODE_ID 6
 #define MY_REPEATER_FEATURE
 

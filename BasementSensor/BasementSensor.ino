@@ -32,7 +32,7 @@
 // Enable and select radio type attached
 #define MY_RADIO_RFM69
 #define MY_IS_RFM69HW
-#define MY_RFM69_FREQUENCY   RF69_868MHZ
+#define MY_RFM69_FREQUENCY   RF69_869MHZ
 #define MY_REPEATER_FEATURE
 
 #include <SPI.h>
