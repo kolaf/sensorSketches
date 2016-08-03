@@ -73,6 +73,8 @@
 DHT dht(HUMIDITY_SENSOR_DIGITAL_PIN, DHTTYPE);
 float lastTemp;
 float lastHum;
+const int maximumNoChange = 3;
+int noChangeCounter = maximumNoChange;
 long lastTemperatureReport = 10000000;
 const long temperatureReportInterval = 900000;
 boolean metric = true;
@@ -139,14 +141,17 @@ void handleTemperature() {
   float temperature = dht.readTemperature();
   if (isnan(temperature)) {
     Serial.println("Failed reading temperature from DHT");
-  } else if (temperature != lastTemp) {
+  } else if (temperature != lastTemp || noChangeCounter == 0) {
     lastTemp = temperature;
+    noChangeCounter = maximumNoChange;
     if (!metric) {
       temperature = dht.readTemperature(true);
     }
-    send(msgTemp.set(temperature, 1));
+    send(msgTemp.set(temperature, 2));
     Serial.print("T: ");
     Serial.println(temperature);
+  } else {
+    noChangeCounter--;
   }
 
   float humidity = dht.readHumidity();
@@ -154,7 +159,7 @@ void handleTemperature() {
     Serial.println("Failed reading humidity from DHT");
   } else if (humidity != lastHum) {
     lastHum = humidity;
-    send(msgHum.set(humidity, 1));
+    send(msgHum.set(humidity, 2));
     Serial.print("H: ");
     Serial.println(humidity);
   }
