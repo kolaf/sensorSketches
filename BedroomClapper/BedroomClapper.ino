@@ -61,10 +61,23 @@
 
 #include <MySensors.h>
 #include <SPI.h>
+#include <DHT.h>
 
+#define CHILD_ID_HUM 3
+#define CHILD_ID_TEMP 4
+#define HUMIDITY_SENSOR_DIGITAL_PIN 3
 
 #define CHILD_ID0 1   // Id of the sensor child
 #define CHILD_ID1 2   // Id of the sensor child
+#define DHTTYPE DHT22   // DHT 22  (AM2302)
+DHT dht(HUMIDITY_SENSOR_DIGITAL_PIN, DHTTYPE);
+float lastTemp;
+float lastHum;
+long lastTemperatureReport = 10000000;
+const long temperatureReportInterval = 900000;
+boolean metric = true;
+MyMessage msgHum(CHILD_ID_HUM, V_HUM);
+MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
 
 const byte eepromValid = 120;    // If the first byte in eeprom is this then the data is valid.
 
@@ -85,7 +98,7 @@ const int maximumKnocks = 20;      // Maximum number of knocks to listen for.
 const int maximumKnockCodes = 2;
 const int knockComplete = 1200;    // Longest time to wait for a knock before we assume that it's finished. (milliseconds)
 
-byte secretCodes[maximumKnockCodes][maximumKnocks] = {{100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},{50, 25, 25, 50, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}; // Initial setup: "Shave and a Hair Cut, two bits."
+byte secretCodes[maximumKnockCodes][maximumKnocks] = {{100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {50, 25, 25, 50, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}; // Initial setup: "Shave and a Hair Cut, two bits."
 int knockReadings[maximumKnocks];    // When someone knocks this array fills with the delays between knocks.
 int knockSensorValue = 0;            // Last reading of the knock sensor.
 boolean programModeActive = false;   // True if we're trying to program a new knock.
@@ -106,21 +119,57 @@ void setup() {
   digitalWrite(ledPin, LOW);
   digitalWrite(programButton, HIGH); // Enable internal pull up
   readSecretKnock();   // Load the secret knock (if any) from EEPROM.
+  dht.begin();
   playbackKnocks();
+
 }
 
 void presentation() {
-  sendSketchInfo("Secret Knock", "1.0");
+  sendSketchInfo("Bedroom clapper", "1.0");
   present(CHILD_ID0, S_LIGHT);
   present(CHILD_ID1, S_LIGHT);
+  present(CHILD_ID_HUM, S_HUM);
+  present(CHILD_ID_TEMP, S_TEMP);
+
+  metric = getConfig().isMetric;
 }
 
 
+void handleTemperature() {
+  float temperature = dht.readTemperature();
+  if (isnan(temperature)) {
+    Serial.println("Failed reading temperature from DHT");
+  } else if (temperature != lastTemp) {
+    lastTemp = temperature;
+    if (!metric) {
+      temperature = dht.readTemperature(true);
+    }
+    send(msgTemp.set(temperature, 1));
+    Serial.print("T: ");
+    Serial.println(temperature);
+  }
 
+  float humidity = dht.readHumidity();
+  if (isnan(humidity)) {
+    Serial.println("Failed reading humidity from DHT");
+  } else if (humidity != lastHum) {
+    lastHum = humidity;
+    send(msgHum.set(humidity, 1));
+    Serial.print("H: ");
+    Serial.println(humidity);
+  }
+}
 
 
 void loop() {
   // Listen for any knock at all.
+  long now = millis();
+  if (abs(lastTemperatureReport - now) > temperatureReportInterval) {
+    // Serial.println( now);
+    // Serial.println(lastTemperatureReport);
+    handleTemperature();
+    lastTemperatureReport = now;
+  }
   knockSensorValue = digitalRead(knockSensor);
   if (digitalRead(programButton) == LOW) { // is the program button pressed?
     delay(100);   // Cheap debounce.
