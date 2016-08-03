@@ -63,9 +63,10 @@
 #include <SPI.h>
 
 
-#define CHILD_ID 1   // Id of the sensor child
+#define CHILD_ID0 1   // Id of the sensor child
+#define CHILD_ID1 2   // Id of the sensor child
 
-const byte eepromValid = 121;    // If the first byte in eeprom is this then the data is valid.
+const byte eepromValid = 120;    // If the first byte in eeprom is this then the data is valid.
 
 /*Pin definitions*/
 const int programButton = 0;   // (Digital 0) Record A New Knock button.
@@ -81,15 +82,19 @@ const int averageRejectValue = 15; // If the average timing of all the knocks is
 const int knockFadeTime = 150;     // Milliseconds we allow a knock to fade before we listen for another one. (Debounce timer.)
 const int lockOperateTime = 2500;  // Milliseconds that we operate the lock solenoid latch before releasing it.
 const int maximumKnocks = 20;      // Maximum number of knocks to listen for.
+const int maximumKnockCodes = 2;
 const int knockComplete = 1200;    // Longest time to wait for a knock before we assume that it's finished. (milliseconds)
 
-byte secretCode[maximumKnocks] = {50, 25, 25, 50, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // Initial setup: "Shave and a Hair Cut, two bits."
+byte secretCodes[maximumKnockCodes][maximumKnocks] = {{100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},{50, 25, 25, 50, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}; // Initial setup: "Shave and a Hair Cut, two bits."
 int knockReadings[maximumKnocks];    // When someone knocks this array fills with the delays between knocks.
 int knockSensorValue = 0;            // Last reading of the knock sensor.
 boolean programModeActive = false;   // True if we're trying to program a new knock.
 
+bool switchStatus[maximumKnockCodes] = {false, false};
+
 bool lockStatus;
-MyMessage nightModeMessage(CHILD_ID, V_LIGHT);
+MyMessage clapperMessage0(CHILD_ID0, V_LIGHT);
+MyMessage clapperMessage1(CHILD_ID1, V_LIGHT);
 
 
 void setup() {
@@ -101,11 +106,13 @@ void setup() {
   digitalWrite(ledPin, LOW);
   digitalWrite(programButton, HIGH); // Enable internal pull up
   readSecretKnock();   // Load the secret knock (if any) from EEPROM.
+  playbackKnocks();
 }
 
 void presentation() {
   sendSketchInfo("Secret Knock", "1.0");
-  present(CHILD_ID, S_LIGHT);
+  present(CHILD_ID0, S_LIGHT);
+  present(CHILD_ID1, S_LIGHT);
 }
 
 
@@ -199,16 +206,29 @@ void listenToSecretKnock() {
 
   //we've got our knock recorded, lets see if it's valid
   if (programModeActive == false) {          // Only do this if we're not recording a new knock.
-    if (validateKnock() == true) {
+
+    if (validateKnock(0) == true) {
       // Lock/unlock door
       chirp(500, 1500);                  // And play a tone in case the user can't see the LED.
       chirp(500, 1000);
       digitalWrite(ledPin, HIGH);
-      send( nightModeMessage.set(true));
+      switchStatus[0] = !switchStatus[0];
+      send( clapperMessage0.set(switchStatus[0]));
 
       delay(2000);
-      send( nightModeMessage.set(false));
       digitalWrite(ledPin,  LOW);
+
+    } else if (validateKnock(1) == true) {
+      // Lock/unlock door
+      chirp(500, 1500);                  // And play a tone in case the user can't see the LED.
+      chirp(500, 1000);
+      digitalWrite(ledPin, HIGH);
+      switchStatus[1] = !switchStatus[1];
+      send( clapperMessage1.set(switchStatus[1]));
+
+      delay(2000);
+      digitalWrite(ledPin,  LOW);
+
     } else {
       Serial.println("fail unlock");
       /*
@@ -221,15 +241,16 @@ void listenToSecretKnock() {
             }
       */
     }
+
   } else { // If we're in programming mode we still validate the lock because it makes some numbers we need, we just don't do anything with the return.
-    validateKnock();
+    validateKnock(0);
   }
 }
 
 
 // Checks to see if our knock matches the secret.
 // Returns true if it's a good knock, false if it's not.
-boolean validateKnock() {
+boolean validateKnock(int number) {
   int i = 0;
 
   int currentKnockCount = 0;
@@ -240,17 +261,17 @@ boolean validateKnock() {
     if (knockReadings[i] > 0) {
       currentKnockCount++;
     }
-    if (secretCode[i] > 0) {
+    if (secretCodes[number][i] > 0) {
       secretKnockCount++;
     }
-
     if (knockReadings[i] > maxKnockInterval) {  // Collect normalization data while we're looping.
       maxKnockInterval = knockReadings[i];
     }
   }
 
   // If we're recording a new knock, save the info and get out of here.
-  if (programModeActive == true) {
+  /*
+    if (programModeActive == true) {
     for (i = 0; i < maximumKnocks; i++) { // Normalize the time between knocks. (the longest time = 100)
       secretCode[i] = map(knockReadings[i], 0, maxKnockInterval, 0, 100);
     }
@@ -258,8 +279,8 @@ boolean validateKnock() {
     programModeActive = false;
     playbackKnock(maxKnockInterval);
     return false;
-  }
-
+    }
+  */
   if (currentKnockCount != secretKnockCount) { // Easiest check first. If the number of knocks is wrong, don't unlock.
     return false;
   }
@@ -273,7 +294,7 @@ boolean validateKnock() {
   int timeDiff = 0;
   for (i = 0; i < maximumKnocks; i++) { // Normalize the times
     knockReadings[i] = map(knockReadings[i], 0, maxKnockInterval, 0, 100);
-    timeDiff = abs(knockReadings[i] - secretCode[i]);
+    timeDiff = abs(knockReadings[i] - secretCodes[number][i]);
     if (timeDiff > rejectValue) {       // Individual value too far out of whack. No access for this knock!
       return false;
     }
@@ -293,8 +314,8 @@ void readSecretKnock() {
   byte reading;
   reading = loadState(1);
   if (reading == eepromValid) {   // only read EEPROM if the signature byte is correct.
-    for (int i = 0; i < maximumKnocks ; i++) {
-      secretCode[i] =  loadState(i + 2);
+    for (int i = 0; i < maximumKnocks * maximumKnockCodes; i++) {
+      secretCodes[i % maximumKnocks][i] =  loadState(i + 2);
     }
   }
 }
@@ -303,14 +324,28 @@ void readSecretKnock() {
 //saves a new pattern too eeprom
 void saveSecretKnock() {
   saveState(1, 0); // clear out the signature. That way we know if we didn't finish the write successfully.
-  for (int i = 0; i < maximumKnocks; i++) {
-    saveState(i + 2, secretCode[i]);
+  for (int i = 0; i < maximumKnocks * maximumKnockCodes; i++) {
+    saveState(i + 2, secretCodes[i % maximumKnocks][i]);
   }
   saveState(1, eepromValid);  // all good. Write the signature so we'll know it's all good.
 }
 
 // Plays back the pattern of the knock in blinks and beeps
-void playbackKnock(int maxKnockInterval) {
+
+void playbackKnocks() {
+  for (int i = 0; i < maximumKnockCodes; i++) {
+    for (int blink = 0; blink < i + 1; blink++) {
+      digitalWrite(ledPin, HIGH);
+      delay(1000);
+      digitalWrite(ledPin, LOW);
+      delay(500);
+    }
+    playbackKnock(i, 400);
+    delay(2000);
+  }
+}
+
+void playbackKnock(int number, int maxKnockInterval) {
   digitalWrite(ledPin, LOW);
   delay(1000);
   digitalWrite(ledPin, HIGH);
@@ -318,8 +353,8 @@ void playbackKnock(int maxKnockInterval) {
   for (int i = 0; i < maximumKnocks ; i++) {
     digitalWrite(ledPin, LOW);
     // only turn it on if there's a delay
-    if (secretCode[i] > 0) {
-      delay(map(secretCode[i], 0, 100, 0, maxKnockInterval)); // Expand the time back out to what it was. Roughly.
+    if (secretCodes[number][i] > 0) {
+      delay(map(secretCodes[number][i], 0, 100, 0, maxKnockInterval)); // Expand the time back out to what it was. Roughly.
       digitalWrite(ledPin, HIGH);
       chirp(200, 1800);
     }
