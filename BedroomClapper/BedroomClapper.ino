@@ -138,6 +138,7 @@ void presentation() {
 
 
 void handleTemperature() {
+  Serial.println("Measuring temperature and humidity");
   float temperature = dht.readTemperature();
   if (isnan(temperature)) {
     Serial.println("Failed reading temperature from DHT");

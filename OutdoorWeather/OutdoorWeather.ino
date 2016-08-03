@@ -61,7 +61,8 @@ int minuteCount = 0;
 bool firstRound = true;
 float pressureAvg[7];
 float dP_dt;
-
+const int batteryReportCycle = 10;
+int currentBatteryReportCycle = batteryReportCycle;
 MyMessage temperatureMessage(CHILD_TEMPERATURE, V_TEMP);
 MyMessage humidityMessage(CHILD_HUMIDITY, V_HUM);
 MyMessage pressureMessage(CHILD_PRESSURE, V_PRESSURE);
@@ -113,14 +114,17 @@ void presentation()  {
 void loop()
 {
   changed = false;
+  currentBatteryReportCycle--;
   float temperature = sensor.getCelsiusHundredths() / 100;
   int humidity = sensor.getHumidityPercent();
   if (lastTemperature != temperature) {
     changed = true;
+    send(temperatureMessage.set(lastTemperature, 1));
     lastTemperature = temperature;
   }
   if (lastHumidity != humidity) {
     changed = true;
+    send(humidityMessage.set(lastHumidity, 1));
     lastHumidity = humidity;
   }
 
@@ -165,6 +169,7 @@ void loop()
           int forecast = 5;//sample(p0);
           if (lastPressure != p0) {
             changed = true;
+            send(pressureMessage.set(lastPressure, 1));
             lastPressure = p0;
             Serial.print("relative (sea-level) pressure: ");
             Serial.print(p0, 2);
@@ -172,6 +177,8 @@ void loop()
           }
           if (lastForecast != forecast) {
             changed = true;
+            if (lastForecast > -1)
+              send(forecastMsg.set(weather[lastForecast]));
             lastForecast = forecast;
           }
         }
@@ -184,12 +191,12 @@ void loop()
   else Serial.println("error starting temperature measurement\n");
 
   if (changed) {
-    send(temperatureMessage.set(lastTemperature, 1));
-    send(pressureMessage.set(lastPressure, 1));
-    send(humidityMessage.set(lastHumidity, 1));
-    sendBatteryLevel( lastBattery);
-    if (lastForecast > -1)
-      send(forecastMsg.set(weather[lastForecast]));
+
+  }
+
+  if (currentBatteryReportCycle == 0) {
+    sendBatteryLevel(lastBattery);
+    currentBatteryReportCycle = batteryReportCycle;
   }
   Serial.println("Sleeping");
   sleep(REPORT_INTERVAL);
@@ -214,7 +221,7 @@ int sample(float pressure) {
   } else if (minuteCount == 35) {
     // Avg pressure in 30 min, value averaged from 0 to 5 min.
     pressureAvg[1] = ((pressureSamples[30] + pressureSamples[31]
-                        + pressureSamples[32] + pressureSamples[33]
+                       + pressureSamples[32] + pressureSamples[33]
                        + pressureSamples[34]) / 5);
     float change = (pressureAvg[1] - pressureAvg[0]);
     if (firstRound) // first time initial 3 hour
