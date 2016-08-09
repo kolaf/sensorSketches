@@ -114,15 +114,14 @@ void presentation()  {
 void loop()
 {
   changed = false;
-  currentBatteryReportCycle--;
   float temperature = sensor.getCelsiusHundredths() / 100;
   int humidity = sensor.getHumidityPercent();
-  if (lastTemperature != temperature) {
+  if (lastTemperature != temperature || true) {
     changed = true;
     send(temperatureMessage.set(lastTemperature, 1));
     lastTemperature = temperature;
   }
-  if (lastHumidity != humidity) {
+  if (lastHumidity != humidity || true) {
     changed = true;
     send(humidityMessage.set(lastHumidity, 1));
     lastHumidity = humidity;
@@ -142,7 +141,7 @@ void loop()
   Serial.print(lastBattery);
   Serial.println(" %");
 #endif
-
+  sendBatteryLevel(lastBattery);
   char status;
   double T, P, p0, a;
   status = pressure.startTemperature();
@@ -167,7 +166,7 @@ void loop()
         {
           p0 = pressure.sealevel(P, ALTITUDE); // we're at 1655 meters (Boulder, CO)
           int forecast = 5;//sample(p0);
-          if (lastPressure != p0) {
+          if (lastPressure != p0 || true) {
             changed = true;
             send(pressureMessage.set(lastPressure, 1));
             lastPressure = p0;
@@ -190,14 +189,7 @@ void loop()
   }
   else Serial.println("error starting temperature measurement\n");
 
-  if (changed) {
-
-  }
-
-  if (currentBatteryReportCycle == 0) {
-    sendBatteryLevel(lastBattery);
-    currentBatteryReportCycle = batteryReportCycle;
-  }
+  
   Serial.println("Sleeping");
   sleep(REPORT_INTERVAL);
   Serial.println("Woken up");

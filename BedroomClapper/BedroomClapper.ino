@@ -173,7 +173,7 @@ void loop() {
   if (abs(lastTemperatureReport - now) > temperatureReportInterval) {
     // Serial.println( now);
     // Serial.println(lastTemperatureReport);
-    handleTemperature();
+    //handleTemperature();
     lastTemperatureReport = now;
   }
   knockSensorValue = digitalRead(knockSensor);
