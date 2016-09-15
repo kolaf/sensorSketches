@@ -6,8 +6,8 @@
 // Enable and select radio type attached
 #define MY_RADIO_RFM69
 #define MY_IS_RFM69HW
-//#define MY_RFM69_FREQUENCY   RF69_867MHZ
-#define MY_RFM69_FREQUENCY   RF69_869MHZ
+#define MY_RFM69_FREQUENCY   RF69_867MHZ
+//#define MY_RFM69_FREQUENCY   RF69_869MHZ
 #define MY_NODE_ID 9
 #define MY_REPEATER_FEATURE
 #define MY_OTA_FIRMWARE_FEATURE
@@ -21,6 +21,7 @@
 #include <DHT.h>
 #include <Bounce2.h>
 #define REPORT_INTERVAL 900000
+#define WATER_REPORT_INTERVAL 15000
 #define ALTITUDE 220
 #define WATER_BUTTON 3 //cannot change because of interrupt
 #define CAMERA_BUTTON 4 //cannot change because of interrupt
@@ -91,13 +92,14 @@ void handleCameraButton() {
 
 void handleWaterButton() {
   int value = waterButtonBounce.read();
-  int remaining=0, minutes = 0;
+  int remaining = 0, minutes = 0, lastMinutes = -1;
+  bool report = true;
   if (value == 0 && buttonStart == 0) {
     time = millis();
     buttonStart = time;
     Serial.println(" Detected water bottle press");
     if (digitalRead(RELAY) == LOW) {
-      buttonStart-=2000;
+      buttonStart -= 2000;
     }
     do {
       delay(300);
@@ -106,22 +108,29 @@ void handleWaterButton() {
         buttonStart = millis();
         remaining = (millis() - buttonStart);
       }
-      minutes = remaining/( 1000*2);
+      minutes = remaining / ( 1000 * 2);
+      if (minutes != lastMinutes) {
+        report = true;
+      }
       if (minutes >= 1) {
-        blinkLight((minutes)*60000-1);
+        if (report) {
+          blinkLight((minutes) * 60000 - 1000);
+          lastMinutes = minutes;
+          report = false;
+        }
       }
       waterButtonBounce.update();
     } while (waterButtonBounce.read() == 0);
     Serial.println(" detected water bottle release");
-    
+
     //int remaining = millis() - buttonStart;
     buttonStart = 0; // Reset so that we can detect a new button press
     if (minutes >= 1) {
       timeRemaining = 60000 * minutes;
       changed = true;
       lastReduce = millis();
-      Serial.println(" Switching on time remaining:");
-      Serial.println(timeRemaining);
+      //Serial.println(" Switching on time remaining:");
+      //Serial.println(timeRemaining);
     } else {
       timeRemaining = 0;
       changed = true;
@@ -140,9 +149,14 @@ void loop()
   handleWaterButton();
   handleCameraButton();
   time = millis();
-  if (time - lastReduce > 15000  || changed) {
+  if (timeRemaining < 0) {
+    timeRemaining = 0;
+  }
+  if ((long)(time - lastReduce) >= 0  || changed) {
     changed = false;
-    timeRemaining -= (time - lastReduce);
+
+    //Serial.println(" Switching on time remaining:");
+    //Serial.println(timeRemaining);
     if (timeRemaining > 0) {
       if (digitalRead(RELAY) == LOW) {
         digitalWrite(RELAY, HIGH);
@@ -152,12 +166,15 @@ void loop()
       }
       // Serial.println((timeRemaining));
 #ifdef USE_RADIO
-      send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
+      send(timeRemainingMessage.set(timeRemaining / 60000.0, 2));
 #endif
     } else {
       timeRemaining = 0;
       if (digitalRead(RELAY) == HIGH) {
         digitalWrite(RELAY, LOW);
+        digitalWrite(LED, HIGH);
+        delay(1000);
+        digitalWrite(LED, LOW);
 #ifdef USE_RADIO
         send(waterMessage.set(false));
         send(timeRemainingMessage.set(0));
@@ -168,26 +185,33 @@ void loop()
 
 
     }
-    lastReduce = time;
+
+    lastReduce = millis() + WATER_REPORT_INTERVAL;
     blinkLight(timeRemaining);
+    timeRemaining -= WATER_REPORT_INTERVAL;//(time - lastReduce);
+    if (timeRemaining < 0) {
+      timeRemaining = 0;
+    }
+
   }
+  //}
   //  Serial.print("Time remaining : ");
   //  Serial.println(timeRemaining);
 
   lastCheck = time;
-  /*
-    if(buttonStart>0){
-    if (timeRemaining > 0) {
-      sleep(BUTTON - 2, CHANGE, 15000);
-    } else {
-      sleep(BUTTON - 2, CHANGE, REPORT_INTERVAL);
-    }
-    }
-  */
+
+  if ((long)(millis() - lastReport) >= 0) {
+#ifdef USE_RADIO
+    send(timeRemainingMessage.set(timeRemaining / 60000.0, 1));
+    send(waterMessage.set(digitalRead(RELAY) ? true : false));
+    send(cameraMessage.set(cameraOn));
+#endif
+    lastReport = millis() + REPORT_INTERVAL;
+  }
 }
 
 void blinkLight(signed long remaining) {
-  int number = 1+remaining / 60000;
+  int number = 1 + (remaining - 1000) / 60000;
   if (remaining == 0) {
     number = 0;
   }

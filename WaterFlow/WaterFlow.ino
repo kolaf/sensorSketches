@@ -9,6 +9,7 @@
 #define MY_RFM69_FREQUENCY   RF69_867MHZ
 #define MY_NODE_ID 6
 #define MY_REPEATER_FEATURE
+#define MY_OTA_FIRMWARE_FEATURE
 
 #include <SPI.h>
 #ifdef USE_RADIO
